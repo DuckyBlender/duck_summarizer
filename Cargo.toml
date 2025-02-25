@@ -13,4 +13,4 @@ log = "0.4"
 fern = { version = "0.7.1", features = ["colored"] }
 chrono = "0.4"
 async-trait = "0.1"
-dotenv = "0.15"
+dotenvy = "0.15"
