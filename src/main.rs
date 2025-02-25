@@ -280,7 +280,7 @@ async fn handle_command(
             bot.send_message(
                 msg.chat.id,
                 format!(
-                    "There are *{}* messages in memory from *{}* different chats\\.\nMessages in this chat: *{}*\nApprox. Memory Usage: *{:.2} KB*",
+                    "There are *{}* messages in memory from *{}* different chats\\.\nMessages in this chat: *{}*\nApprox\\. Memory Usage: *{:.2} KB*",
                     total_messages, total_chats, current_chat_messages, memory_kb
                 ),
             )
