@@ -274,6 +274,7 @@ async fn handle_command(
                 )
                 .sum();
             let memory_kb = memory_bytes as f64 / 1024.0;
+            let escaped_memory_kb = markdown::escape(&format!("{:.2}", memory_kb));
 
             info!(target: "memory", "Memory command: {} messages from {} chats; current chat: {} messages; approx. {:.2} KB memory used", total_messages, total_chats, current_chat_messages, memory_kb);
 
@@ -281,7 +282,7 @@ async fn handle_command(
                 msg.chat.id,
                 format!(
                     "There are *{}* messages in memory from *{}* different chats\\.\nMessages in this chat: *{}*\nApprox\\. Memory Usage: *{:.2} KB*",
-                    total_messages, total_chats, current_chat_messages, memory_kb
+                    total_messages, total_chats, current_chat_messages, escaped_memory_kb
                 ),
             )
             .reply_parameters(ReplyParameters::new(msg.id))
