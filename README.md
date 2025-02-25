@@ -9,6 +9,8 @@ Ducky Summarizer is a Telegram bot that summarizes conversations using an in-mem
 - Open source: [GitHub](https://github.com/DuckyBlender/duck_summarizer).
 
 ## Installation
+
+### Option 1: Manual Installation
 1. Clone the repository:
    ```
    git clone https://github.com/DuckyBlender/duck_summarizer
@@ -23,6 +25,23 @@ Ducky Summarizer is a Telegram bot that summarizes conversations using an in-mem
    cargo run --release
    ```
 
+### Option 2: Docker
+1. Clone the repository:
+   ```
+   git clone https://github.com/DuckyBlender/duck_summarizer
+   ```
+2. Create a `.env` file in the project root with your API keys as shown above.
+3. Build and run with Docker:
+   ```
+   docker build -t duck_summarizer .
+   docker run -d duck_summarizer
+   ```
+
+Alternatively, you can use the provided start script:
+```
+./start.sh
+```
+
 ## Usage
 - `/help` - Displays available commands.
 - `/summarize <count>` - Summarizes the last messages. Defaults to 100 but can go up to 1000.
@@ -30,4 +49,4 @@ Ducky Summarizer is a Telegram bot that summarizes conversations using an in-mem
 - `/privacy` - Displays the privacy disclaimer.
 
 ## License
-This project is open source. See the [LICENSE](LICENSE) file for details.
+Do anything you want.
