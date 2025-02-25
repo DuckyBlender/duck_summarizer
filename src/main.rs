@@ -108,8 +108,10 @@ enum Command {
     Summarize(String),
     #[command(description = "display this help message.")]
     Help,
-    #[command(description = "show total messages and chat count in-memory")]
+    #[command(description = "show total messages and chat count in-memory", alias = "stats")]
     Memory,
+    #[command(description = "display privacy disclaimer")]
+    Privacy,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -261,6 +263,15 @@ async fn handle_command(
             )
             .reply_parameters(ReplyParameters::new(msg.id))
             .parse_mode(ParseMode::MarkdownV2)
+            .await?;
+        }
+        Command::Privacy => {
+            info!(target: "command", "User {} requested /privacy in chat {} ({})", user, chat_id, chat_type);
+            bot.send_message(
+                msg.chat.id, 
+                "This bot doesn't save any messages and everything is in-memory.\n\nOpen source: https://github.com/DuckyBlender/duck_summarizer"
+            )
+            .reply_parameters(ReplyParameters::new(msg.id))
             .await?;
         }
     }
