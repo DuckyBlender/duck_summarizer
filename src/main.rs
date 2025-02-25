@@ -24,7 +24,7 @@ fn setup_logger() -> Result<(), fern::InitError> {
         .info(Color::Green)
         .warn(Color::Yellow);
 
-    let log_level = LevelFilter::Info;
+    let log_level = LevelFilter::Debug;
 
     fern::Dispatch::new()
         .format(move |out, message, record| {
@@ -38,7 +38,7 @@ fn setup_logger() -> Result<(), fern::InitError> {
         })
         .level(log_level)
         // Set specific module log levels if needed
-        .level_for(env!("CARGO_PKG_NAME"), log_level)
+        // .level_for(env!("CARGO_PKG_NAME"), log_level)
         // Output to stdout and log file
         .chain(io::stdout())
         .chain(fern::log_file("duck_summarizer.log")?)
@@ -140,37 +140,43 @@ struct Choice {
 
 async fn handle_message(msg: Message, message_store: MessageStoreType) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
-    let chat_type = format!("{:?}", msg.chat.kind);
 
     if let Some(text) = msg.text() {
-        let user_name = msg
-            .from
-            .as_ref()
-            .and_then(|user| user.username.clone().or_else(|| Some(user.first_name.clone())));
+        let display_name = msg.from.as_ref().map(|user| {
+            if let Some(last_name) = &user.last_name {
+                format!("{} {}", user.first_name, last_name)
+            } else {
+                user.first_name.clone()
+            }
+        });
+        
+        trace!(target: "message_handler", "DisplayName: {}, FirstName: {}", 
+            display_name.clone().unwrap_or_else(|| "None".to_string()), 
+            msg.from.as_ref().map(|u| u.first_name.clone()).unwrap_or_else(|| "None".to_string()));
         
         let user_id = match msg.from.as_ref() {
             Some(user) => user.id,
             None => {
                 debug!(target: "message_handler", "Received a message without a sender in chat {}, skipping", chat_id);
-                return Ok(());  // Skip messages without a sender
+                return Ok(());
             }
         };
 
         trace!(target: "message_handler", "Received message from {} (ID: {}): {}", 
-               user_name.clone().unwrap_or_else(|| "Unknown".to_string()), 
-               user_id, 
-               text);
+            display_name.clone().unwrap_or_else(|| "Unknown".to_string()), 
+            user_id, 
+            text);
 
         let saved_message = SavedMessage {
             message_id: msg.id,
-            from_user: user_name,
+            from_user: display_name,
             reply_to_message_id: msg.reply_to_message().map(|reply| reply.id),
             text: text.to_string(),
         };
 
         let mut store = message_store.lock().await;
         store.add_message(chat_id, saved_message.clone());
-        debug!(target: "storage", "Saved message in chat {} ({}): message ID {}", chat_id, chat_type, msg.id);
+        // debug!(target: "storage", "Saved message in chat {} ({}): message ID {}", chat_id, chat_type, msg.id);
     }
     Ok(())
 }
@@ -183,19 +189,25 @@ async fn handle_command(
 ) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
     let chat_type = format!("{:?}", msg.chat.kind);
-    let user = msg.from
-        .map(|user| format!("{} (ID: {})", user.username.clone().unwrap_or_else(|| user.first_name.clone()), user.id))
-        .unwrap_or_else(|| "Unknown".to_string());
+    let display_name = msg.from.map(|user| {
+        if let Some(last_name) = &user.last_name {
+            format!("{} {}", user.first_name, last_name)
+        } else if let Some(username) = &user.username {
+            username.clone()
+        } else {
+            user.first_name.clone()
+        }
+    }).unwrap_or_else(|| "Unknown".to_string());
 
     match cmd {
         Command::Help => {
-            info!(target: "command", "User {} requested /help in chat {} ({})", user, chat_id, chat_type);
+            info!(target: "command", "User {} requested /help in chat {} ({})", display_name, chat_id, chat_type);
             bot.send_message(msg.chat.id, Command::descriptions().to_string())
                 .reply_parameters(ReplyParameters::new(msg.id))
                 .await?;
         }
         Command::Summarize(count_str) => {
-            info!(target: "command", "User {} requested /summarize {} in chat {} ({})", user, count_str, chat_id, chat_type);
+            info!(target: "command", "User {} requested /summarize {} in chat {} ({})", display_name, count_str, chat_id, chat_type);
             let trimmed = count_str.trim();
             let count = if trimmed.is_empty() {
                 100
@@ -203,7 +215,7 @@ async fn handle_command(
                 match usize::from_str(trimmed) {
                     Ok(n) if n > 0 && n <= MAX_MESSAGES => n,
                     _ => {
-                        warn!(target: "command", "Invalid count '{}' provided for /summarize by {} in chat {}", count_str, user, chat_id);
+                        warn!(target: "command", "Invalid count '{}' provided for /summarize by {} in chat {}", count_str, display_name, chat_id);
                         bot.send_message(
                             msg.chat.id,
                             format!("Please provide a valid number between 1 and {}", MAX_MESSAGES),
@@ -219,14 +231,14 @@ async fn handle_command(
             let messages = store.get_last_n_messages(msg.chat.id, count);
 
             if messages.is_empty() {
-                info!(target: "command", "No messages found to summarize in chat {} for user {}", chat_id, user);
+                info!(target: "command", "No messages found to summarize in chat {} for user {}", chat_id, display_name);
                 bot.send_message(msg.chat.id, "No messages to summarize.")
                     .reply_parameters(ReplyParameters::new(msg.id))
                     .await?;
                 return Ok(());
             }
 
-            debug!(target: "command", "Summarizing {} messages in chat {} for user {}", messages.len(), chat_id, user);
+            debug!(target: "command", "Summarizing {} messages in chat {} for user {}", messages.len(), chat_id, display_name);
             // Use actual number of messages retrieved in the summary message
             let bot_msg = bot.send_message(msg.chat.id, format!("Summarizing {} messages...", messages.len()))
                 .reply_parameters(ReplyParameters::new(msg.id))
@@ -234,14 +246,14 @@ async fn handle_command(
             
             match summarize_conversation(&messages).await {
                 Ok(summary) => {
-                    info!(target: "summarization", "Successfully generated summary of {} messages in chat {} for user {}", count, chat_id, user);
+                    info!(target: "summarization", "Successfully generated summary of {} messages in chat {} for user {}", count, chat_id, display_name);
                     let summary = format!("_{}_", markdown::escape(&summary));
                     bot.edit_message_text(bot_msg.chat.id, bot_msg.id, summary)
                         .parse_mode(ParseMode::MarkdownV2)
                         .await?;
                 },
                 Err(e) => {
-                    error!(target: "summarization", "Failed to summarize conversation in chat {} for user {}: {}", chat_id, user, e);
+                    error!(target: "summarization", "Failed to summarize conversation in chat {} for user {}: {}", chat_id, display_name, e);
                     bot.edit_message_text(bot_msg.chat.id, bot_msg.id, "Failed to summarize the conversation.")
                         .await?;
                 }
@@ -251,14 +263,25 @@ async fn handle_command(
             let store = message_store.lock().await;
             let total_chats = store.chats.len();
             let total_messages: usize = store.chats.values().map(|v| v.len()).sum();
-            // Get how many messages are saved in the current chat.
             let current_chat_messages = store.chats.get(&chat_id).map(|v| v.len()).unwrap_or(0);
-            info!(target: "memory", "Memory command: {} messages from {} chats; current chat: {} messages", total_messages, total_chats, current_chat_messages);
+
+            // Calculate approximate memory usage in bytes
+            let memory_bytes: usize = store.chats.values()
+                .flat_map(|msgs| msgs.iter())
+                .map(|msg| std::mem::size_of_val(msg)
+                    + msg.text.len()
+                    + msg.from_user.as_ref().map(|u| u.len()).unwrap_or(0)
+                )
+                .sum();
+            let memory_kb = memory_bytes as f64 / 1024.0;
+
+            info!(target: "memory", "Memory command: {} messages from {} chats; current chat: {} messages; approx. {:.2} KB memory used", total_messages, total_chats, current_chat_messages, memory_kb);
+
             bot.send_message(
                 msg.chat.id,
                 format!(
-                    "There are *{}* messages in memory from *{}* different chats.\nMessages in this chat: *{}*",
-                    total_messages, total_chats, current_chat_messages
+                    "There are *{}* messages in memory from *{}* different chats\\.\nMessages in this chat: *{}*\nApprox. Memory Usage: *{:.2} KB*",
+                    total_messages, total_chats, current_chat_messages, memory_kb
                 ),
             )
             .reply_parameters(ReplyParameters::new(msg.id))
@@ -266,12 +289,13 @@ async fn handle_command(
             .await?;
         }
         Command::Privacy => {
-            info!(target: "command", "User {} requested /privacy in chat {} ({})", user, chat_id, chat_type);
+            info!(target: "command", "User {} requested /privacy in chat {} ({})", display_name, chat_id, chat_type);
             bot.send_message(
                 msg.chat.id, 
-                "This bot doesn't save any messages and everything is in-memory.\n\nOpen source: https://github.com/DuckyBlender/duck_summarizer"
+                "This bot stores all messages *only* in memory and *never* writes any data to disk\\.\n\nhttps://github.com/DuckyBlender/duck_summarizer"
             )
             .reply_parameters(ReplyParameters::new(msg.id))
+            .parse_mode(ParseMode::MarkdownV2)
             .await?;
         }
     }
@@ -297,6 +321,9 @@ async fn summarize_conversation(messages: &[SavedMessage]) -> Result<String, Box
     let mut conversation_text = String::new();
     for message in messages {
         let username = message.from_user.as_deref().unwrap_or("Unknown");
+
+        // Replace newlines with literals
+        let text = message.text.replace('\n', "\\n");
         
         // Add reply information if available
         if let Some(reply_id) = message.reply_to_message_id {
@@ -306,9 +333,9 @@ async fn summarize_conversation(messages: &[SavedMessage]) -> Result<String, Box
                 .map(|u| u.as_str())
                 .unwrap_or("someone");
             
-            conversation_text.push_str(&format!("{} (replying to {}): {}\n", username, replied_to, message.text));
+            conversation_text.push_str(&format!("{} (replying to {}): {}\n", username, replied_to, text));
         } else {
-            conversation_text.push_str(&format!("{}: {}\n", username, message.text));
+            conversation_text.push_str(&format!("{}: {}\n", username, text));
         }
     }
 
@@ -337,10 +364,10 @@ async fn summarize_conversation(messages: &[SavedMessage]) -> Result<String, Box
             },
             ChatMessage {
                 role: "user".to_string(),
-                content: format!("Please summarize this Telegram conversation:\n\n{}", conversation_text),
+                content: format!("{}", conversation_text),
             },
         ],
-        temperature: 0.7,
+        temperature: 0.4,
         max_tokens: 2000,
     };
 

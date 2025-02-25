@@ -48,5 +48,9 @@ Alternatively, you can use the provided start script:
 - `/memory` - Shows message and chat statistics.
 - `/privacy` - Displays the privacy disclaimer.
 
+## Todo
+- [ ] `Thread/topic support`
+- [ ] `Ratelimit`
+
 ## License
 Do anything you want.
