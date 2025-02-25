@@ -364,7 +364,7 @@ async fn summarize_conversation(messages: &[SavedMessage]) -> Result<String, Box
             },
             ChatMessage {
                 role: "user".to_string(),
-                content: format!("{}", conversation_text),
+                content: conversation_text.to_string(),
             },
         ],
         temperature: 0.4,
