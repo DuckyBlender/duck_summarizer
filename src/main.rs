@@ -292,7 +292,7 @@ async fn handle_command(
             info!(target: "command", "User {} requested /privacy in chat {} ({})", display_name, chat_id, chat_type);
             bot.send_message(
                 msg.chat.id, 
-                "This bot stores all messages *only* in memory and *never* writes any data to disk\\.\n\nhttps://github.com/DuckyBlender/duck_summarizer"
+                "This bot stores all messages *only* in memory and *never* writes any data to disk\\.\n\n[Source Code](https://github.com/DuckyBlender/duck_summarizer)"
             )
             .reply_parameters(ReplyParameters::new(msg.id))
             .parse_mode(ParseMode::MarkdownV2)
