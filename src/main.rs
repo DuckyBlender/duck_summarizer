@@ -41,7 +41,7 @@ fn setup_logger() -> Result<(), fern::InitError> {
         .level_for(env!("CARGO_PKG_NAME"), log_level)
         // Output to stdout and log file
         .chain(io::stdout())
-        .chain(fern::log_file("ducky_summarizer.log")?)
+        .chain(fern::log_file("duck_summarizer.log")?)
         .apply()?;
 
     Ok(())
